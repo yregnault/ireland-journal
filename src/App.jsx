@@ -8,7 +8,6 @@ const SAVE_DELAY = 2000;
 // ── Server storage (passe par Vercel qui relaye vers Free) ──
 function proxyPhotoUrl(url) {
   if (!url) return "";
-  // Convertir http://jwi051.free.fr/photos/xxx.jpg → /api/storage?action=photo&file=xxx.jpg
   var match = url.match(/free\.fr\/photos\/(.+)$/);
   if (match) return "/api/storage?action=photo&file=" + encodeURIComponent(match[1]);
   if (url.startsWith("http://")) return url.replace("http://", "https://");
@@ -21,7 +20,6 @@ async function serverLoad() {
     if (!r.ok) return null;
     const data = await r.json();
     if (!data) return null;
-    // Convertir toutes les URLs photos en proxy
     if (data.days) {
       data.days = data.days.map(function(d) {
         if (d.photos) {
@@ -43,7 +41,6 @@ async function serverUpload(base64, filename) {
     const r = await fetch("/api/storage?action=upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base64, filename }) });
     if (!r.ok) return null;
     const d = await r.json();
-    // Retourner directement l'URL proxy
     return proxyPhotoUrl(d.url);
   } catch { return null; }
 }
@@ -70,6 +67,14 @@ async function geocode(loc) {
   return null;
 }
 
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = (b[0] - a[0]) * Math.PI / 180;
+  const dLon = (b[1] - a[1]) * Math.PI / 180;
+  const x = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a[0] * Math.PI / 180) * Math.cos(b[0] * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
 function loadLeaflet() {
   return new Promise((res) => {
     if (window.L) return res(window.L);
@@ -80,6 +85,14 @@ function loadLeaflet() {
 }
 
 function addDaysToDate(ds, n) { if (!ds) return ""; const d = new Date(ds); d.setDate(d.getDate() + n); return d.toISOString().split("T")[0]; }
+
+function makeDay(id, date) { return { id, date: date || "", locations: [""], notes: "", photos: [], summary: "" }; }
+
+function getAllLocations(days) {
+  const locs = [];
+  days.forEach((d) => { (d.locations || [d.location || ""]).forEach((l) => { if (l?.trim()) locs.push({ dayId: d.id, loc: l.trim(), day: d }); }); });
+  return locs;
+}
 
 // ── Lightbox ──
 function Lightbox({ photos, index, onClose, onNav }) {
@@ -148,7 +161,58 @@ function Settings({ config, setConfig, isAdmin }) {
         <div><label style={{ fontSize: 13, fontWeight: 600, color: "#2d6a4f", display: "block", marginBottom: 4 }}>Destination(s)</label><input value={config.destinations} onChange={(e) => set("destinations", e.target.value)} style={inputSt} placeholder="Irlande, Irlande du Nord..." /></div>
         <div><label style={{ fontSize: 13, fontWeight: 600, color: "#2d6a4f", display: "block", marginBottom: 4 }}>Participants</label><input value={config.participants} onChange={(e) => set("participants", e.target.value)} style={inputSt} placeholder="Yann, Alice, Marc, Julie" /></div>
       </div>
-      <div style={{ marginTop: 16, padding: 12, background: "#f0fdf4", borderRadius: 10, fontSize: 13, color: "#52b788" }}>💡 Tout est sauvegardé automatiquement sur le serveur. Les photos et données sont accessibles depuis n'importe quel appareil.</div>
+      <div style={{ marginTop: 16, padding: 12, background: "#f0fdf4", borderRadius: 10, fontSize: 13, color: "#52b788" }}>💡 Tout est sauvegardé automatiquement sur le serveur.</div>
+    </div>
+  );
+}
+
+// ── Kilometer Counter ──
+function KmCounter({ days }) {
+  const [totalKm, setTotalKm] = useState(0);
+  const [computing, setComputing] = useState(false);
+  const [segments, setSegments] = useState([]);
+
+  const compute = async () => {
+    setComputing(true);
+    const allLocs = getAllLocations(days);
+    const coords = [];
+    for (const item of allLocs) {
+      const c = await geocode(item.loc);
+      if (c) coords.push({ ...item, coords: c });
+    }
+    let total = 0;
+    const segs = [];
+    for (let i = 1; i < coords.length; i++) {
+      const km = haversineKm(coords[i - 1].coords, coords[i].coords);
+      total += km;
+      segs.push({ from: coords[i - 1].loc, to: coords[i].loc, km: Math.round(km) });
+    }
+    setTotalKm(Math.round(total));
+    setSegments(segs);
+    setComputing(false);
+  };
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, padding: 16, border: "1px solid #d8f3dc", marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 28 }}>🚗</span>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#2d6a4f" }}>{totalKm} km</div>
+          <div style={{ fontSize: 12, color: "#95d5b2" }}>Distance totale (à vol d'oiseau)</div>
+        </div>
+        <button onClick={compute} disabled={computing} style={{ marginLeft: "auto", background: "linear-gradient(135deg, #40916c, #2d6a4f)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: computing ? 0.7 : 1 }}>
+          {computing ? "⏳ Calcul..." : "🔄 Calculer"}
+        </button>
+      </div>
+      {segments.length > 0 && (
+        <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {segments.map((s, i) => (
+            <div key={i} style={{ fontSize: 12, background: "#f0fdf4", borderRadius: 6, padding: "4px 10px", color: "#2d6a4f" }}>
+              {s.from} → {s.to} : <b>{s.km} km</b>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -179,18 +243,20 @@ function TripMap({ days }) {
     if (!ready || !window.L || !mRef.current) return;
     const L = window.L, m = mRef.current;
     lRef.current.forEach((l) => m.removeLayer(l)); lRef.current = [];
-    const wl = days.filter((d) => d.location?.trim());
-    if (!wl.length) { setStatus("Aucun lieu"); m.setView(IRELAND_CENTER, 7); return; }
-    setStatus(`Recherche de ${wl.length} lieu(x)...`);
+    const allLocs = getAllLocations(days);
+    if (!allLocs.length) { setStatus("Aucun lieu"); m.setView(IRELAND_CENTER, 7); return; }
+    setStatus(`Recherche de ${allLocs.length} lieu(x)...`);
     const pts = [];
-    for (const d of wl) {
-      const c = await geocode(d.location); if (!c) continue;
-      const icon = L.divIcon({ html: `<div style="background:#2d6a4f;color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35)">${d.id}</div>`, className: "", iconSize: [32, 32], iconAnchor: [16, 16] });
-      const th = d.photos.slice(0, 3).map((p) => `<img src="${p.url || p.thumb || p.src}" style="width:48px;height:48px;object-fit:cover;border-radius:4px"/>`).join("");
-      const popup = `<div style="font-family:system-ui;min-width:120px"><b style="color:#2d6a4f">Jour ${d.id}</b><br/>${d.location}${d.date ? `<br/><small style="color:#999">${d.date}</small>` : ""}${th ? `<div style="display:flex;gap:3px;margin-top:5px">${th}</div>` : ""}</div>`;
+    let idx = 0;
+    for (const item of allLocs) {
+      idx++;
+      const c = await geocode(item.loc); if (!c) continue;
+      const icon = L.divIcon({ html: `<div style="background:#2d6a4f;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35)">${idx}</div>`, className: "", iconSize: [28, 28], iconAnchor: [14, 14] });
+      const th = item.day.photos.slice(0, 2).map((p) => `<img src="${p.thumb || p.url || p.src}" style="width:40px;height:40px;object-fit:cover;border-radius:4px"/>`).join("");
+      const popup = `<div style="font-family:system-ui;min-width:100px"><b style="color:#2d6a4f">Jour ${item.dayId}</b><br/>${item.loc}${item.day.date ? `<br/><small style="color:#999">${item.day.date}</small>` : ""}${th ? `<div style="display:flex;gap:3px;margin-top:4px">${th}</div>` : ""}</div>`;
       lRef.current.push(L.marker(c, { icon }).addTo(m).bindPopup(popup));
       pts.push(c);
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 250));
     }
     if (pts.length > 1) { const pl = L.polyline(pts, { color: "#40916c", weight: 3, dashArray: "8 6" }).addTo(m); lRef.current.push(pl); m.fitBounds(L.latLngBounds(pts).pad(0.2)); }
     else if (pts.length === 1) m.setView(pts[0], 11);
@@ -202,17 +268,19 @@ function TripMap({ days }) {
 
   return (
     <div>
+      <KmCounter days={days} />
       <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={refresh} style={{ background: "linear-gradient(135deg, #40916c, #2d6a4f)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>🔄 Actualiser</button>
         {status && <span style={{ fontSize: 13, color: "#52b788" }}>{status}</span>}
       </div>
       <div ref={cRef} style={{ width: "100%", height: 420, borderRadius: 14, overflow: "hidden", border: "2px solid #d8f3dc", background: "#e8f5e9" }} />
-      {days.some((d) => d.location?.trim()) && (
-        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {days.filter((d) => d.location?.trim()).map((d) => (
-            <div key={d.id} style={{ background: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 13, border: "1px solid #d8f3dc", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ background: "#2d6a4f", color: "#fff", borderRadius: "50%", width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{d.id}</span>
-              <span style={{ color: "#2d6a4f", fontWeight: 500 }}>{d.location}</span>
+      {getAllLocations(days).length > 0 && (
+        <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {getAllLocations(days).map((item, i) => (
+            <div key={i} style={{ background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, border: "1px solid #d8f3dc", display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ background: "#2d6a4f", color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{i + 1}</span>
+              <span style={{ color: "#555", fontSize: 11 }}>J{item.dayId}</span>
+              <span style={{ color: "#2d6a4f", fontWeight: 500 }}>{item.loc}</span>
             </div>
           ))}
         </div>
@@ -222,12 +290,22 @@ function TripMap({ days }) {
 }
 
 // ── Day Card ──
-function DayCard({ day, updateDay, removeDay, isAdmin, config, onOpenLightbox, onUploadPhoto }) {
+function DayCard({ day, dayNumber, updateDay, removeDay, isAdmin, config, onOpenLightbox, onUploadPhoto }) {
   const fileRef = useRef();
   const [expanded, setExpanded] = useState(true);
   const [loadingAI, setLoadingAI] = useState(false);
   const [aiError, setAiError] = useState("");
   const [uploading, setUploading] = useState(false);
+
+  const locs = day.locations || [day.location || ""];
+
+  const setLoc = (idx, val) => {
+    const newLocs = [...locs];
+    newLocs[idx] = val;
+    updateDay(day.id, { locations: newLocs });
+  };
+  const addLoc = () => updateDay(day.id, { locations: [...locs, ""] });
+  const removeLoc = (idx) => { if (locs.length <= 1) return; const nl = locs.filter((_, i) => i !== idx); updateDay(day.id, { locations: nl }); };
 
   const handlePhotos = async (e) => {
     const files = Array.from(e.target.files);
@@ -238,19 +316,12 @@ function DayCard({ day, updateDay, removeDay, isAdmin, config, onOpenLightbox, o
       const dataUrl = await new Promise((r) => { const rd = new FileReader(); rd.onload = (ev) => r(ev.target.result); rd.readAsDataURL(file); });
       const compressed = await resizeImage(dataUrl, 800);
       const thumb = await resizeImage(dataUrl, 300);
-      // Upload to server
       const b64 = compressed.split(",")[1];
       const fname = `day${day.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
       const url = await onUploadPhoto(b64, fname);
-      // Upload thumb too
       const thumbB64 = thumb.split(",")[1];
       const thumbUrl = await onUploadPhoto(thumbB64, `thumb_${fname}`);
-      newPhotos.push({
-        id: Date.now() + Math.random(),
-        url: url || compressed,
-        thumb: thumbUrl || thumb,
-        src: dataUrl // local full-res for this session
-      });
+      newPhotos.push({ id: Date.now() + Math.random(), url: url || compressed, thumb: thumbUrl || thumb, src: dataUrl });
     }
     updateDay(day.id, { photos: newPhotos });
     setUploading(false);
@@ -263,26 +334,19 @@ function DayCard({ day, updateDay, removeDay, isAdmin, config, onOpenLightbox, o
     try {
       const imgs = [];
       for (const p of day.photos.slice(0, 5)) {
-        let imgData = null;
-        const imgSrc = p.src || p.url;
-        if (!imgSrc) continue;
-        if (imgSrc.startsWith("data:")) {
-          imgData = imgSrc;
-        } else {
-          // Fetch from URL and convert to base64
-          try {
-            const r = await fetch(imgSrc);
-            const blob = await r.blob();
-            imgData = await new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(rd.result); rd.readAsDataURL(blob); });
-          } catch { continue; }
+        let imgData = p.src || p.url;
+        if (!imgData) continue;
+        if (!imgData.startsWith("data:")) {
+          try { const r = await fetch(imgData); const blob = await r.blob(); imgData = await new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(rd.result); rd.readAsDataURL(blob); }); } catch { continue; }
         }
         const small = await resizeImage(imgData, 600);
         imgs.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: small.split(",")[1] } });
       }
-      if (!imgs.length) { setAiError("Aucune photo exploitable. Réimportez-les."); setLoadingAI(false); return; }
+      if (!imgs.length) { setAiError("Aucune photo exploitable."); setLoadingAI(false); return; }
       const parts = [];
       if (day.date) parts.push(`Date : ${day.date}.`);
-      if (day.location) parts.push(`Lieu : ${day.location}.`);
+      const locStr = locs.filter(l => l.trim()).join(", ");
+      if (locStr) parts.push(`Lieux visités : ${locStr}.`);
       if (config.destinations) parts.push(`Destination : ${config.destinations}.`);
       if (config.participants) parts.push(`Participants : ${config.participants}.`);
       const nb = config.participants ? config.participants.split(",").length : 4;
@@ -295,33 +359,47 @@ Rédige un résumé concis en français (50-70 mots). Utilise "nous"/"on" et les
       try { resp = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body }); if (!resp.ok) throw new Error(); } catch { resp = await fetch("/api/summary", { method: "POST", headers: { "Content-Type": "application/json" }, body }); }
       if (!resp.ok) throw new Error(`API ${resp.status}: ${(await resp.text()).slice(0, 150)}`);
       const data = await resp.json();
-      updateDay(day.id, { aiSummary: data.content?.map((c) => c.text || "").filter(Boolean).join("") || "Aucun résumé." });
+      updateDay(day.id, { summary: data.content?.map((c) => c.text || "").filter(Boolean).join("") || "Aucun résumé." });
     } catch (err) { setAiError(err.message); }
     setLoadingAI(false);
   };
 
   const photoDisplay = (p) => p.thumb || p.url || p.src || "";
+  const locDisplay = locs.filter(l => l.trim()).join(" → ");
 
   return (
-    <div style={{ background: "#fff", borderRadius: 16, marginBottom: 20, boxShadow: "0 2px 16px rgba(45,106,79,0.10)", border: "1px solid #d8f3dc", overflow: "hidden" }}>
+    <div style={{ background: "#fff", borderRadius: 16, marginBottom: 4, boxShadow: "0 2px 16px rgba(45,106,79,0.10)", border: "1px solid #d8f3dc", overflow: "hidden" }}>
       <div onClick={() => setExpanded(!expanded)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", cursor: "pointer", background: expanded ? "linear-gradient(135deg, #2d6a4f, #40916c)" : "#f7fdf9" }}>
-        <span style={{ fontSize: 22, color: expanded ? "#fff" : "#2d6a4f", fontWeight: 700 }}>Jour {day.id}</span>
-        {day.location && <span style={{ color: expanded ? "#b7e4c7" : "#52b788", fontSize: 14, marginLeft: 4 }}>— {day.location}</span>}
+        <span style={{ fontSize: 22, color: expanded ? "#fff" : "#2d6a4f", fontWeight: 700 }}>Jour {dayNumber}</span>
+        {locDisplay && <span style={{ color: expanded ? "#b7e4c7" : "#52b788", fontSize: 14, marginLeft: 4 }}>— {locDisplay}</span>}
         {day.date && <span style={{ color: expanded ? "#b7e4c7" : "#95d5b2", fontSize: 13, marginLeft: "auto" }}>{day.date}</span>}
         <span style={{ marginLeft: day.date ? 8 : "auto", color: expanded ? "#fff" : "#2d6a4f", fontSize: 18, transform: expanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</span>
       </div>
       {expanded && (
         <div style={{ padding: 20 }}>
           {isAdmin ? (
-            <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-              <input type="date" value={day.date} onChange={(e) => updateDay(day.id, { date: e.target.value })} style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #b7e4c7", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
-              <input type="text" placeholder="📍 Lieu" value={day.location} onChange={(e) => updateDay(day.id, { location: e.target.value })} style={{ flex: 1, minWidth: 200, padding: "8px 12px", borderRadius: 8, border: "1.5px solid #b7e4c7", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+                <input type="date" value={day.date} onChange={(e) => updateDay(day.id, { date: e.target.value })} style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #b7e4c7", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+              </div>
+              {locs.map((l, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#95d5b2", width: 20, textAlign: "center", flexShrink: 0 }}>{i + 1}.</span>
+                  <input type="text" placeholder={i === 0 ? "📍 Lieu principal" : "📍 Autre lieu visité"} value={l} onChange={(e) => setLoc(i, e.target.value)} style={{ flex: 1, minWidth: 180, padding: "8px 12px", borderRadius: 8, border: "1.5px solid #b7e4c7", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+                  {locs.length > 1 && <button onClick={() => removeLoc(i)} style={{ background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 18 }}>×</button>}
+                </div>
+              ))}
+              <button onClick={addLoc} style={{ background: "none", border: "1px dashed #b7e4c7", borderRadius: 8, padding: "4px 12px", color: "#52b788", fontSize: 12, cursor: "pointer", marginTop: 2 }}>+ Ajouter un lieu</button>
             </div>
-          ) : (day.date || day.location) && (
-            <div style={{ display: "flex", gap: 12, marginBottom: 12, fontSize: 14, color: "#555" }}>
-              {day.date && <span>📅 {day.date}</span>}{day.location && <span>📍 {day.location}</span>}
-            </div>
+          ) : (
+            (day.date || locDisplay) && (
+              <div style={{ display: "flex", gap: 12, marginBottom: 12, fontSize: 14, color: "#555", flexWrap: "wrap" }}>
+                {day.date && <span>📅 {day.date}</span>}
+                {locDisplay && <span>📍 {locDisplay}</span>}
+              </div>
+            )
           )}
+
           {isAdmin ? (
             <textarea placeholder="Notes, anecdotes..." value={day.notes} onChange={(e) => updateDay(day.id, { notes: e.target.value })} rows={2} style={{ width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid #d8f3dc", fontSize: 14, resize: "vertical", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
           ) : day.notes ? <div style={{ fontSize: 14, color: "#444", lineHeight: 1.6, marginBottom: 8, whiteSpace: "pre-wrap" }}>{day.notes}</div> : null}
@@ -343,23 +421,41 @@ Rédige un résumé concis en français (50-70 mots). Utilise "nous"/"on" et les
               </div>
             )}
           </div>
+
           {isAdmin && (
             <div style={{ marginTop: 18, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <button onClick={generateSummary} disabled={!day.photos.length || loadingAI} style={{ background: !day.photos.length ? "#ccc" : "linear-gradient(135deg, #40916c, #2d6a4f)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", cursor: !day.photos.length ? "default" : "pointer", fontSize: 14, fontWeight: 600, opacity: loadingAI ? 0.7 : 1, display: "flex", alignItems: "center", gap: 8 }}>
-                {loadingAI ? <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</span> Analyse...</> : <>✨ Résumé IA</>}
+                {loadingAI ? <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</span> Analyse...</> : <>✨ Générer le résumé</>}
               </button>
             </div>
           )}
           {aiError && <div style={{ marginTop: 12, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: 12, fontSize: 13, color: "#b91c1c" }}>⚠️ {aiError}</div>}
-          {day.aiSummary && (
+
+          {day.summary && (
             <div style={{ marginTop: 16, background: "linear-gradient(135deg, #f0fdf4, #d8f3dc)", borderRadius: 12, padding: 16, borderLeft: "4px solid #40916c" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#2d6a4f", marginBottom: 6 }}>✨ Résumé</div>
-              <div style={{ fontSize: 14, color: "#1b4332", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{day.aiSummary}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#2d6a4f", marginBottom: 6 }}>📝 Résumé de la journée</div>
+              {isAdmin ? (
+                <textarea value={day.summary} onChange={(e) => updateDay(day.id, { summary: e.target.value })} rows={3} style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #b7e4c7", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", background: "rgba(255,255,255,0.6)", color: "#1b4332", lineHeight: 1.6, resize: "vertical" }} />
+              ) : (
+                <div style={{ fontSize: 14, color: "#1b4332", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{day.summary}</div>
+              )}
             </div>
           )}
-          {isAdmin && removeDay && <button onClick={() => removeDay(day.id)} style={{ marginTop: 14, background: "none", border: "1px solid #e0e0e0", borderRadius: 8, padding: "6px 14px", color: "#999", fontSize: 12, cursor: "pointer" }}>Supprimer ce jour</button>}
+
+          {isAdmin && removeDay && <button onClick={() => removeDay(day.id)} style={{ marginTop: 14, background: "none", border: "1px solid #e0e0e0", borderRadius: 8, padding: "6px 14px", color: "#999", fontSize: 12, cursor: "pointer" }}>🗑️ Supprimer ce jour</button>}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Insert Day Button ──
+function InsertDayBtn({ onClick }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", padding: "2px 0", marginBottom: 4 }}>
+      <button onClick={onClick} title="Intercaler un jour" style={{ background: "none", border: "2px dashed #d8f3dc", borderRadius: 20, padding: "2px 16px", color: "#95d5b2", fontSize: 12, cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={(e) => { e.target.style.borderColor = "#52b788"; e.target.style.color = "#2d6a4f"; }} onMouseLeave={(e) => { e.target.style.borderColor = "#d8f3dc"; e.target.style.color = "#95d5b2"; }}>
+        + insérer un jour
+      </button>
     </div>
   );
 }
@@ -384,7 +480,9 @@ function TripHeader({ config, isAdmin, onLogin, onLogout, saveStatus }) {
 }
 
 function StatsBar({ days }) {
-  const items = [{ icon: "📅", l: "Jours", v: days.length }, { icon: "📸", l: "Photos", v: days.reduce((s, d) => s + d.photos.length, 0) }, { icon: "📍", l: "Lieux", v: days.filter((d) => d.location).length }, { icon: "✨", l: "Résumés", v: days.filter((d) => d.aiSummary).length }];
+  const nbPhotos = days.reduce((s, d) => s + d.photos.length, 0);
+  const nbLocs = getAllLocations(days).length;
+  const items = [{ icon: "📅", l: "Jours", v: days.length }, { icon: "📸", l: "Photos", v: nbPhotos }, { icon: "📍", l: "Étapes", v: nbLocs }, { icon: "📝", l: "Résumés", v: days.filter((d) => d.summary).length }];
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
       {items.map((it) => (
@@ -409,7 +507,7 @@ function TabBar({ tab, setTab }) {
 }
 
 function Gallery({ days, onOpenLightbox }) {
-  const all = days.flatMap((d) => d.photos.map((p) => ({ ...p, day: d.id, location: d.location })));
+  const all = days.flatMap((d, di) => d.photos.map((p) => ({ ...p, dayNum: di + 1, location: (d.locations || []).filter(l => l.trim()).join(", ") })));
   const allFlat = days.flatMap((d) => d.photos);
   if (!all.length) return <div style={{ textAlign: "center", padding: 40, color: "#95d5b2" }}>Aucune photo.</div>;
   let gi = 0;
@@ -421,7 +519,7 @@ function Gallery({ days, onOpenLightbox }) {
           <div key={p.id} onClick={() => onOpenLightbox(allFlat, idx)} style={{ borderRadius: 12, overflow: "hidden", position: "relative", aspectRatio: "1", boxShadow: "0 2px 8px rgba(0,0,0,0.12)", cursor: "pointer" }}>
             <img src={p.thumb || p.url || p.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent, rgba(0,0,0,0.6))", padding: "20px 8px 8px", color: "#fff", fontSize: 11 }}>
-              <div style={{ fontWeight: 600 }}>Jour {p.day}</div>{p.location && <div>{p.location}</div>}
+              <div style={{ fontWeight: 600 }}>Jour {p.dayNum}</div>{p.location && <div>{p.location}</div>}
             </div>
           </div>
         );
@@ -431,26 +529,30 @@ function Gallery({ days, onOpenLightbox }) {
 }
 
 function FullSummary({ days, onOpenLightbox }) {
-  const s = days.filter((d) => d.aiSummary);
+  const s = days.filter((d) => d.summary);
   if (!s.length) return <div style={{ textAlign: "center", padding: 40, color: "#95d5b2" }}>Aucun résumé.</div>;
   return (
     <div>
-      {s.map((d) => (
-        <div key={d.id} style={{ marginBottom: 20, background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 2px 10px rgba(45,106,79,0.08)", border: "1px solid #d8f3dc" }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
-            <span style={{ fontSize: 18, fontWeight: 700, color: "#2d6a4f" }}>Jour {d.id}</span>
-            {d.location && <span style={{ color: "#52b788", fontSize: 14 }}>📍 {d.location}</span>}
-            {d.date && <span style={{ color: "#95d5b2", fontSize: 13, marginLeft: "auto" }}>{d.date}</span>}
-          </div>
-          <div style={{ color: "#1b4332", lineHeight: 1.65, fontSize: 14, whiteSpace: "pre-wrap" }}>{d.aiSummary}</div>
-          {d.photos.length > 0 && (
-            <div style={{ display: "flex", gap: 6, marginTop: 12, overflowX: "auto" }}>
-              {d.photos.slice(0, 5).map((p, i) => <img key={p.id} src={p.thumb || p.url || p.src} alt="" onClick={() => onOpenLightbox(d.photos, i)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }} />)}
-              {d.photos.length > 5 && <div style={{ width: 60, height: 60, borderRadius: 8, background: "#d8f3dc", display: "flex", alignItems: "center", justifyContent: "center", color: "#2d6a4f", fontWeight: 700, fontSize: 13 }}>+{d.photos.length - 5}</div>}
+      {s.map((d, i) => {
+        const dayNum = days.indexOf(d) + 1;
+        const locStr = (d.locations || []).filter(l => l.trim()).join(" → ");
+        return (
+          <div key={d.id} style={{ marginBottom: 20, background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 2px 10px rgba(45,106,79,0.08)", border: "1px solid #d8f3dc" }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+              <span style={{ fontSize: 18, fontWeight: 700, color: "#2d6a4f" }}>Jour {dayNum}</span>
+              {locStr && <span style={{ color: "#52b788", fontSize: 14 }}>📍 {locStr}</span>}
+              {d.date && <span style={{ color: "#95d5b2", fontSize: 13, marginLeft: "auto" }}>{d.date}</span>}
             </div>
-          )}
-        </div>
-      ))}
+            <div style={{ color: "#1b4332", lineHeight: 1.65, fontSize: 14, whiteSpace: "pre-wrap" }}>{d.summary}</div>
+            {d.photos.length > 0 && (
+              <div style={{ display: "flex", gap: 6, marginTop: 12, overflowX: "auto" }}>
+                {d.photos.slice(0, 5).map((p, pi) => <img key={p.id} src={p.thumb || p.url || p.src} alt="" onClick={() => onOpenLightbox(d.photos, pi)} style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }} />)}
+                {d.photos.length > 5 && <div style={{ width: 60, height: 60, borderRadius: 8, background: "#d8f3dc", display: "flex", alignItems: "center", justifyContent: "center", color: "#2d6a4f", fontWeight: 700, fontSize: 13 }}>+{d.photos.length - 5}</div>}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -470,20 +572,25 @@ export default function App() {
   const saveTimer = useRef(null);
   const initialized = useRef(false);
 
-  // ── Load from server on mount ──
   useEffect(() => {
     (async () => {
       const data = await serverLoad();
       if (data) {
         if (data.config) setConfig(data.config);
-        if (data.days?.length) setDays(data.days);
+        if (data.days?.length) {
+          // Migration: location string → locations array
+          setDays(data.days.map(d => {
+            if (!d.locations) d.locations = d.location ? [d.location] : [""];
+            if (!d.summary && d.aiSummary) d.summary = d.aiSummary;
+            return d;
+          }));
+        }
       }
       initialized.current = true;
       setLoading(false);
     })();
   }, []);
 
-  // ── Generate days from dates ──
   useEffect(() => {
     if (!initialized.current) return;
     if (!config.startDate || !config.endDate) return;
@@ -491,26 +598,24 @@ export default function App() {
     if (isNaN(start) || isNaN(end) || end < start) return;
     const nb = Math.round((end - start) / 86400000) + 1;
     setDays((prev) => {
-      if (prev.length > 0 && prev.some(d => d.photos.length || d.aiSummary || d.notes || d.location)) return prev;
+      if (prev.length > 0 && prev.some(d => d.photos.length || d.summary || d.notes || (d.locations || []).some(l => l.trim()))) return prev;
       const nd = [];
       for (let i = 0; i < nb; i++) {
         const ex = prev.find((d) => d.id === i + 1);
-        nd.push(ex || { id: i + 1, date: addDaysToDate(config.startDate, i), location: "", notes: "", photos: [], aiSummary: "" });
+        nd.push(ex || makeDay(i + 1, addDaysToDate(config.startDate, i)));
       }
       return nd;
     });
   }, [config.startDate, config.endDate]);
 
-  // Init fallback
-  useEffect(() => { if (!loading && !days.length) setDays([{ id: 1, date: config.startDate || "", location: "", notes: "", photos: [], aiSummary: "" }]); }, [loading]);
+  useEffect(() => { if (!loading && !days.length) setDays([makeDay(1, config.startDate || "")]); }, [loading]);
 
-  // ── Auto-save (debounced) ──
+  // Auto-save
   useEffect(() => {
     if (!initialized.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaveStatus("Modifications non sauvegardées...");
     saveTimer.current = setTimeout(async () => {
-      // Prepare data: strip local base64 src, keep only URLs
       const cleanDays = days.map((d) => ({
         ...d,
         photos: d.photos.map((p) => ({ id: p.id, url: p.url || "", thumb: p.thumb || "" }))
@@ -524,15 +629,31 @@ export default function App() {
   }, [config, days]);
 
   const updateDay = useCallback((id, patch) => { setDays((p) => p.map((d) => d.id === id ? { ...d, ...patch } : d)); }, []);
-  const addDay = () => { const nId = days.length ? Math.max(...days.map((d) => d.id)) + 1 : 1; const dt = days.length && days[days.length - 1].date ? addDaysToDate(days[days.length - 1].date, 1) : ""; setDays([...days, { id: nId, date: dt, location: "", notes: "", photos: [], aiSummary: "" }]); };
+
+  const addDay = () => {
+    const lastDay = days[days.length - 1];
+    const dt = lastDay?.date ? addDaysToDate(lastDay.date, 1) : "";
+    const nId = Date.now();
+    setDays([...days, makeDay(nId, dt)]);
+  };
+
+  const insertDay = (afterIndex) => {
+    const nId = Date.now();
+    const prevDay = days[afterIndex];
+    const nextDay = days[afterIndex + 1];
+    let dt = "";
+    if (prevDay?.date && nextDay?.date) dt = prevDay.date;
+    else if (prevDay?.date) dt = addDaysToDate(prevDay.date, 1);
+    const nd = [...days];
+    nd.splice(afterIndex + 1, 0, makeDay(nId, dt));
+    setDays(nd);
+  };
+
   const removeDay = (id) => { if (days.length > 1) setDays(days.filter((d) => d.id !== id)); };
 
   const openLightbox = useCallback((photos, index) => { setLbPhotos(photos); setLbIndex(index); }, []);
   const navLightbox = useCallback((dir) => { setLbIndex((i) => { const n = i + dir; if (n < 0) return lbPhotos.length - 1; if (n >= lbPhotos.length) return 0; return n; }); }, [lbPhotos]);
-
-  const handleUpload = useCallback(async (b64, fname) => {
-    return await serverUpload(b64, fname);
-  }, []);
+  const handleUpload = useCallback(async (b64, fname) => await serverUpload(b64, fname), []);
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(180deg, #f0fdf4, #e8f5e9)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui" }}>
@@ -552,8 +673,13 @@ export default function App() {
         <TabBar tab={tab} setTab={setTab} />
         {tab === "journal" && (
           <>
-            {days.map((d) => <DayCard key={d.id} day={d} updateDay={updateDay} removeDay={days.length > 1 ? removeDay : null} isAdmin={isAdmin} config={config} onOpenLightbox={openLightbox} onUploadPhoto={handleUpload} />)}
-            {isAdmin && <button onClick={addDay} style={{ width: "100%", padding: 14, borderRadius: 12, border: "2px dashed #95d5b2", background: "transparent", color: "#2d6a4f", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>+ Ajouter un jour</button>}
+            {days.map((d, i) => (
+              <div key={d.id}>
+                <DayCard day={d} dayNumber={i + 1} updateDay={updateDay} removeDay={days.length > 1 ? removeDay : null} isAdmin={isAdmin} config={config} onOpenLightbox={openLightbox} onUploadPhoto={handleUpload} />
+                {isAdmin && <InsertDayBtn onClick={() => insertDay(i)} />}
+              </div>
+            ))}
+            {isAdmin && <button onClick={addDay} style={{ width: "100%", padding: 14, borderRadius: 12, border: "2px dashed #95d5b2", background: "transparent", color: "#2d6a4f", fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>+ Ajouter un jour à la fin</button>}
           </>
         )}
         {tab === "map" && <TripMap days={days} />}
