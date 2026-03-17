@@ -5,19 +5,16 @@ const IRELAND_CENTER = [53.5, -7.5];
 const GEO_CACHE = {};
 const SAVE_DELAY = 2000;
 
-// ⚠️ REMPLACE par ton identifiant Free (celui de ton adresse @free.fr)
-const FREE_BASE = "http://jwi051.free.fr";
-
-// ── Server storage helpers (Free Pages Perso) ──
+// ── Server storage (passe par Vercel qui relaye vers Free) ──
 async function serverLoad() {
-  try { const r = await fetch(FREE_BASE + "/api/load.php"); if (!r.ok) return null; return await r.json(); } catch { return null; }
+  try { const r = await fetch("/api/storage?action=load"); if (!r.ok) return null; return await r.json(); } catch { return null; }
 }
 async function serverSave(data) {
-  try { await fetch(FREE_BASE + "/api/save.php", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); } catch {}
+  try { await fetch("/api/storage?action=save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); } catch {}
 }
 async function serverUpload(base64, filename) {
   try {
-    const r = await fetch(FREE_BASE + "/api/upload.php", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base64, filename }) });
+    const r = await fetch("/api/storage?action=upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base64, filename }) });
     if (!r.ok) return null;
     const d = await r.json(); return d.url;
   } catch { return null; }
