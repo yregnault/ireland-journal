@@ -68,31 +68,26 @@ async function geocode(loc) {
 }
 
 async function getRouteDistance(a, b, avoidMotorway) {
-  // OSRM: coords are lng,lat (reversed from our lat,lng)
-  const coords = `${a[1]},${a[0]};${b[1]},${b[0]}`;
-  const base = "https://router.project-osrm.org/route/v1/driving/";
-  const exclude = avoidMotorway ? "&exclude=motorway" : "";
+  var coords = a[1] + "," + a[0] + ";" + b[1] + "," + b[0];
+  var base = "https://router.project-osrm.org/route/v1/driving/";
+  var exclude = avoidMotorway ? "&exclude=motorway" : "";
   try {
-    const url = `${base}${coords}?overview=false${exclude}`;
-    const r = await fetch(url);
-    const d = await r.json();
-    if (d.code === "Ok" && d.routes?.length) {
-      return {
-        km: Math.round(d.routes[0].distance / 1000),
-        mins: Math.round(d.routes[0].duration / 60)
-      };
+    var url = base + coords + "?overview=false" + exclude;
+    var r = await fetch(url);
+    var d = await r.json();
+    if (d.code === "Ok" && d.routes && d.routes.length > 0) {
+      return { km: Math.round(d.routes[0].distance / 1000), mins: Math.round(d.routes[0].duration / 60) };
     }
-    // Fallback sans exclude si motorway pas supporté
-    if (avoidMotorway) return getRouteDistance(a, b, false);
-  } catch {}
+    if (avoidMotorway) return await getRouteDistance(a, b, false);
+  } catch (e) { /* ignore */ }
   return null;
 }
 
 function formatDuration(mins) {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h === 0) return `${m} min`;
-  return `${h}h${m > 0 ? (m < 10 ? "0" + m : m) : "00"}`;
+  var h = Math.floor(mins / 60);
+  var m = mins % 60;
+  if (h === 0) return m + " min";
+  return h + "h" + (m > 0 ? (m < 10 ? "0" + m : m) : "00");
 }
 
 function loadLeaflet() {
