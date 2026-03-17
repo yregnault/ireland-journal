@@ -6,8 +6,34 @@ const GEO_CACHE = {};
 const SAVE_DELAY = 2000;
 
 // ── Server storage (passe par Vercel qui relaye vers Free) ──
+function proxyPhotoUrl(url) {
+  if (!url) return "";
+  // Convertir http://jwi051.free.fr/photos/xxx.jpg → /api/storage?action=photo&file=xxx.jpg
+  var match = url.match(/free\.fr\/photos\/(.+)$/);
+  if (match) return "/api/storage?action=photo&file=" + encodeURIComponent(match[1]);
+  if (url.startsWith("http://")) return url.replace("http://", "https://");
+  return url;
+}
+
 async function serverLoad() {
-  try { const r = await fetch("/api/storage?action=load"); if (!r.ok) return null; return await r.json(); } catch { return null; }
+  try {
+    const r = await fetch("/api/storage?action=load");
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!data) return null;
+    // Convertir toutes les URLs photos en proxy
+    if (data.days) {
+      data.days = data.days.map(function(d) {
+        if (d.photos) {
+          d.photos = d.photos.map(function(p) {
+            return { id: p.id, url: proxyPhotoUrl(p.url), thumb: proxyPhotoUrl(p.thumb) };
+          });
+        }
+        return d;
+      });
+    }
+    return data;
+  } catch { return null; }
 }
 async function serverSave(data) {
   try { await fetch("/api/storage?action=save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); } catch {}
@@ -16,7 +42,9 @@ async function serverUpload(base64, filename) {
   try {
     const r = await fetch("/api/storage?action=upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base64, filename }) });
     if (!r.ok) return null;
-    const d = await r.json(); return d.url;
+    const d = await r.json();
+    // Retourner directement l'URL proxy
+    return proxyPhotoUrl(d.url);
   } catch { return null; }
 }
 

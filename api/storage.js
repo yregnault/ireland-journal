@@ -57,6 +57,17 @@ export default async function handler(req, res) {
       return res.status(200).send(text);
     }
 
+    if (action === 'photo') {
+      const file = req.query.file;
+      if (!file) return res.status(400).json({ error: "Paramètre file requis" });
+      const r = await fetch(FREE_BASE + "/photos/" + encodeURIComponent(file));
+      if (!r.ok) return res.status(404).json({ error: "Photo introuvable" });
+      const buffer = await r.arrayBuffer();
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      return res.status(200).send(Buffer.from(buffer));
+    }
+
     return res.status(400).json({ error: "Action inconnue: " + action });
 
   } catch (error) {

@@ -4,12 +4,28 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json; charset=utf-8');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header('HTTP/1.1 204 No Content');
+    exit;
+}
 
-$file = __DIR__ . '/../data/journal.json';
+$file = dirname(__FILE__) . '/../data/journal.json';
 
 if (file_exists($file)) {
-    echo file_get_contents($file);
+    $fp = fopen($file, 'r');
+    if ($fp) {
+        $size = filesize($file);
+        if ($size > 0) {
+            $content = fread($fp, $size);
+            echo $content;
+        } else {
+            echo 'null';
+        }
+        fclose($fp);
+    } else {
+        echo 'null';
+    }
 } else {
     echo 'null';
 }
+?>
