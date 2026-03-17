@@ -374,6 +374,100 @@ function RouteBadge(props) {
   );
 }
 
+// ── Mini Map per day ──
+function MiniMap(props) {
+  var locations = props.locations || [];
+  var containerRef = useRef(null);
+  var mapRef = useRef(null);
+  var layersRef = useRef([]);
+  var _r = useState(false), ready = _r[0], setReady = _r[1];
+
+  useEffect(function() {
+    var cancelled = false;
+    loadLeaflet().then(function(L) {
+      if (cancelled || !L || !containerRef.current) return;
+      if (!mapRef.current) {
+        mapRef.current = L.map(containerRef.current, {
+          scrollWheelZoom: false,
+          dragging: true,
+          zoomControl: false,
+          attributionControl: false
+        }).setView(IRELAND_CENTER, 7);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "" }).addTo(mapRef.current);
+        setTimeout(function() { if (mapRef.current) mapRef.current.invalidateSize(); }, 200);
+      }
+      setReady(true);
+    });
+    return function() { cancelled = true; };
+  }, []);
+
+  useEffect(function() {
+    if (!ready || !window.L || !mapRef.current) return;
+    var L = window.L, m = mapRef.current;
+    var cancelled = false;
+
+    // Clear old layers
+    layersRef.current.forEach(function(l) { m.removeLayer(l); });
+    layersRef.current = [];
+
+    var locs = locations.filter(function(l) { return l && l.trim(); });
+    if (locs.length === 0) return;
+
+    (async function() {
+      var pts = [];
+      for (var i = 0; i < locs.length; i++) {
+        var c = await geocode(locs[i]);
+        if (cancelled || !c) continue;
+        var icon = L.divIcon({
+          html: '<div style="background:#2d6a4f;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3)">' + (i + 1) + '</div>',
+          className: "", iconSize: [22, 22], iconAnchor: [11, 11]
+        });
+        var mk = L.marker(c, { icon: icon }).addTo(m);
+        layersRef.current.push(mk);
+        pts.push(c);
+      }
+      if (cancelled) return;
+
+      // Get route between points
+      if (pts.length >= 2) {
+        for (var j = 1; j < pts.length; j++) {
+          var route = await getRouteWithGeometry(pts[j - 1], pts[j], false);
+          if (cancelled) return;
+          if (route && route.geometry && route.geometry.length > 1) {
+            var line = L.polyline(route.geometry, { color: "#40916c", weight: 3, opacity: 0.8 }).addTo(m);
+            layersRef.current.push(line);
+          }
+          await new Promise(function(r) { setTimeout(r, 300); });
+        }
+      }
+
+      if (pts.length > 1) {
+        m.fitBounds(L.latLngBounds(pts).pad(0.3));
+      } else if (pts.length === 1) {
+        m.setView(pts[0], 12);
+      }
+      setTimeout(function() { if (mapRef.current) mapRef.current.invalidateSize(); }, 100);
+    })();
+
+    return function() { cancelled = true; };
+  }, [ready, locations.join(",")]);
+
+  // Resize fix when container becomes visible
+  useEffect(function() {
+    var timer = setTimeout(function() {
+      if (mapRef.current) mapRef.current.invalidateSize();
+    }, 500);
+    return function() { clearTimeout(timer); };
+  });
+
+  return (
+    <div ref={containerRef} style={{
+      width: "100%", height: 180, borderRadius: 12, overflow: "hidden",
+      border: "1.5px solid #d8f3dc", background: "#e8f5e9", marginBottom: 12
+    }} />
+  );
+}
+
 // ── Day Card ──
 function DayCard(props) {
   var day = props.day, dayNumber = props.dayNumber, updateDay = props.updateDay, removeDay = props.removeDay;
@@ -449,14 +543,15 @@ function DayCard(props) {
     <div style={{ background: "#fff", borderRadius: 16, marginBottom: 4, boxShadow: "0 2px 16px rgba(45,106,79,0.10)", border: "1px solid #d8f3dc", overflow: "hidden" }}>
       <div onClick={function() { setExpanded(!expanded); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", cursor: "pointer", background: expanded ? "linear-gradient(135deg, #2d6a4f, #40916c)" : "#f7fdf9" }}>
         <span style={{ fontSize: 22, color: expanded ? "#fff" : "#2d6a4f", fontWeight: 700 }}>Jour {dayNumber}</span>
-        {locDisplay && <span style={{ color: expanded ? "#b7e4c7" : "#52b788", fontSize: 14, marginLeft: 4 }}>— {locDisplay}</span>}
-        {day.km > 0 && <span style={{ color: expanded ? "#b7e4c7" : "#95d5b2", fontSize: 12 }}>🚗 {day.km}km</span>}
+        {locDisplay && <span style={{ color: expanded ? "#b7e4c7" : "#52b788", fontSize: 17, fontWeight: 600, marginLeft: 4 }}>— {locDisplay}</span>}
+        {day.km > 0 && <span style={{ color: expanded ? "#b7e4c7" : "#95d5b2", fontSize: 15, fontWeight: 600 }}>🚗 {day.km}km</span>}
         {day.date && <span style={{ color: expanded ? "#b7e4c7" : "#95d5b2", fontSize: 13, marginLeft: "auto" }}>{day.date}</span>}
         <span style={{ marginLeft: day.date ? 8 : "auto", color: expanded ? "#fff" : "#2d6a4f", fontSize: 18, transform: expanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</span>
       </div>
       {expanded && (
         <div style={{ padding: 20 }}>
           <RouteBadge day={day} isAdmin={isAdmin} updateDay={updateDay} onGoMap={onGoMap} />
+          {locs.some(function(l) { return l && l.trim(); }) && <MiniMap locations={locs} />}
           {isAdmin ? (
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
@@ -626,12 +721,15 @@ function FullSummary(props) {
         return (
           <div key={d.id} className="summary-card" style={{ marginBottom: 24, background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 2px 10px rgba(45,106,79,0.08)", border: "1px solid #d8f3dc" }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 18, fontWeight: 700, color: "#2d6a4f" }}>Jour {dayNum}</span>
-              {locStr && <span style={{ color: "#52b788", fontSize: 14 }}>📍 {locStr}</span>}
-              {d.km > 0 && <span style={{ fontSize: 13, color: "#95d5b2" }}>🚗 {d.km} km</span>}
-              {d.date && <span style={{ color: "#95d5b2", fontSize: 13, marginLeft: "auto" }}>{d.date}</span>}
+              <span style={{ fontSize: 20, fontWeight: 700, color: "#2d6a4f" }}>Jour {dayNum}</span>
+              {locStr && <span style={{ color: "#52b788", fontSize: 17, fontWeight: 600 }}>📍 {locStr}</span>}
+              {d.km > 0 && <span style={{ fontSize: 15, fontWeight: 600, color: "#2d6a4f" }}>🚗 {d.km} km</span>}
+              {d.date && <span style={{ color: "#95d5b2", fontSize: 14, marginLeft: "auto" }}>{d.date}</span>}
             </div>
             <div style={{ color: "#1b4332", lineHeight: 1.65, fontSize: 14, whiteSpace: "pre-wrap", marginBottom: 12 }}>{d.summary}</div>
+            {d.notes && (
+              <div style={{ fontSize: 13, color: "#555", lineHeight: 1.5, whiteSpace: "pre-wrap", marginBottom: 12, padding: "10px 14px", background: "#f9fafb", borderRadius: 10, borderLeft: "3px solid #d8f3dc", fontStyle: "italic" }}>{d.notes}</div>
+            )}
             {d.photos.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 8 }}>
                 {d.photos.slice(0, 8).map(function(p, pi) { return (
