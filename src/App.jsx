@@ -543,8 +543,8 @@ function DayCard(props) {
     <div style={{ background: "#fff", borderRadius: 16, marginBottom: 4, boxShadow: "0 2px 16px rgba(45,106,79,0.10)", border: "1px solid #d8f3dc", overflow: "hidden" }}>
       <div onClick={function() { setExpanded(!expanded); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", cursor: "pointer", background: expanded ? "linear-gradient(135deg, #2d6a4f, #40916c)" : "#f7fdf9" }}>
         <span style={{ fontSize: 22, color: expanded ? "#fff" : "#2d6a4f", fontWeight: 700 }}>Jour {dayNumber}</span>
-        {locDisplay && <span style={{ color: expanded ? "#b7e4c7" : "#52b788", fontSize: 17, fontWeight: 600, marginLeft: 4 }}>— {locDisplay}</span>}
-        {day.km > 0 && <span style={{ color: expanded ? "#b7e4c7" : "#95d5b2", fontSize: 15, fontWeight: 600 }}>🚗 {day.km}km</span>}
+        {locDisplay && <span style={{ color: expanded ? "#b7e4c7" : "#52b788", fontSize: 14, marginLeft: 4 }}>— {locDisplay}</span>}
+        {day.km > 0 && <span style={{ color: expanded ? "#b7e4c7" : "#95d5b2", fontSize: 12 }}>🚗 {day.km}km</span>}
         {day.date && <span style={{ color: expanded ? "#b7e4c7" : "#95d5b2", fontSize: 13, marginLeft: "auto" }}>{day.date}</span>}
         <span style={{ marginLeft: day.date ? 8 : "auto", color: expanded ? "#fff" : "#2d6a4f", fontSize: 18, transform: expanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</span>
       </div>
@@ -721,14 +721,16 @@ function FullSummary(props) {
         return (
           <div key={d.id} className="summary-card" style={{ marginBottom: 24, background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 2px 10px rgba(45,106,79,0.08)", border: "1px solid #d8f3dc" }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 20, fontWeight: 700, color: "#2d6a4f" }}>Jour {dayNum}</span>
-              {locStr && <span style={{ color: "#52b788", fontSize: 17, fontWeight: 600 }}>📍 {locStr}</span>}
-              {d.km > 0 && <span style={{ fontSize: 15, fontWeight: 600, color: "#2d6a4f" }}>🚗 {d.km} km</span>}
-              {d.date && <span style={{ color: "#95d5b2", fontSize: 14, marginLeft: "auto" }}>{d.date}</span>}
+              <span style={{ fontSize: 18, fontWeight: 700, color: "#2d6a4f" }}>Jour {dayNum}</span>
+              {locStr && <span style={{ color: "#52b788", fontSize: 14 }}>📍 {locStr}</span>}
+              {d.km > 0 && <span style={{ fontSize: 13, color: "#95d5b2" }}>🚗 {d.km} km</span>}
+              {d.date && <span style={{ color: "#95d5b2", fontSize: 13, marginLeft: "auto" }}>{d.date}</span>}
             </div>
             <div style={{ color: "#1b4332", lineHeight: 1.65, fontSize: 14, whiteSpace: "pre-wrap", marginBottom: 12 }}>{d.summary}</div>
-            {d.notes && (
-              <div style={{ fontSize: 13, color: "#555", lineHeight: 1.5, whiteSpace: "pre-wrap", marginBottom: 12, padding: "10px 14px", background: "#f9fafb", borderRadius: 10, borderLeft: "3px solid #d8f3dc", fontStyle: "italic" }}>{d.notes}</div>
+            {(d.locations || []).some(function(l) { return l && l.trim(); }) && (
+              <div className="no-print" style={{ marginBottom: 12 }}>
+                <MiniMap locations={d.locations || []} />
+              </div>
             )}
             {d.photos.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 8 }}>
