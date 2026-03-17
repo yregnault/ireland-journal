@@ -295,10 +295,13 @@ function TripMap(props) {
     }
   }, [routeGeo, ready]);
 
+  var _tk = useState(0), tick = _tk[0], setTick = _tk[1];
+
   var refresh = useCallback(async function() {
     if (!ready || !window.L || !mRef.current) return;
     var L = window.L, m = mRef.current;
-    // Clear only markers
+    setTimeout(function() { m.invalidateSize(); }, 100);
+    // Clear markers
     markersRef.current.forEach(function(l) { m.removeLayer(l); });
     markersRef.current = [];
     var allLocs = getAllLocations(days);
@@ -319,16 +322,15 @@ function TripMap(props) {
     if (pts.length > 1) { m.fitBounds(L.latLngBounds(pts).pad(0.2)); }
     else if (pts.length === 1) m.setView(pts[0], 11);
     setStatus(pts.length + " étape(s)");
-    setTimeout(function() { if (mRef.current) mRef.current.invalidateSize(); }, 100);
-  }, [ready, days]);
+  }, [ready, days, tick]);
 
-  useEffect(function() { if (ready) refresh(); }, [ready]);
+  useEffect(function() { if (ready) refresh(); }, [ready, tick]);
 
   return (
     <div>
       <KmCounter days={days} routeGeo={routeGeo} setRouteGeo={setRouteGeo} updateDay={updateDay} />
       <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <button onClick={refresh} style={{ background: "linear-gradient(135deg, #40916c, #2d6a4f)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>🔄 Actualiser les marqueurs</button>
+        <button onClick={function() { setTick(function(t) { return t + 1; }); }} style={{ background: "linear-gradient(135deg, #40916c, #2d6a4f)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>🔄 Actualiser les marqueurs</button>
         {status && <span style={{ fontSize: 13, color: "#52b788" }}>{status}</span>}
       </div>
       <div ref={cRef} style={{ width: "100%", height: 420, borderRadius: 14, overflow: "hidden", border: "2px solid #d8f3dc", background: "#e8f5e9" }} />
