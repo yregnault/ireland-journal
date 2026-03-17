@@ -860,12 +860,13 @@ export default function App() {
         "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}" +
         ".leaflet-container{font-family:inherit;}" +
         "@media print{" +
+        "@page{margin:20mm 15mm;}" +
         ".no-print{display:none !important;}" +
         ".print-title{display:block !important;}" +
         "body{background:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}" +
-        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #ddd !important;}" +
-        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #ddd !important;}" +
-        ".leaflet-container{display:none !important;}" +
+        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #ddd !important;margin-top:10px !important;}" +
+        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #ddd !important;margin-top:10px !important;}" +
+        ".leaflet-container{height:160px !important;}" +
         "textarea{border:none !important;resize:none !important;background:transparent !important;}" +
         "button{display:none !important;}" +
         "input{border:none !important;background:transparent !important;}" +
