@@ -472,8 +472,10 @@ function MiniMap(props) {
 function DayCard(props) {
   var day = props.day, dayNumber = props.dayNumber, updateDay = props.updateDay, removeDay = props.removeDay;
   var isAdmin = props.isAdmin, config = props.config, onOpenLightbox = props.onOpenLightbox, onUploadPhoto = props.onUploadPhoto, onGoMap = props.onGoMap;
+  var forceExpand = props.forceExpand;
   var fileRef = useRef();
   var _e = useState(true), expanded = _e[0], setExpanded = _e[1];
+  var isExpanded = forceExpand || expanded;
   var _l = useState(false), loadingAI = _l[0], setLoadingAI = _l[1];
   var _a = useState(""), aiError = _a[0], setAiError = _a[1];
   var _u = useState(false), uploading = _u[0], setUploading = _u[1];
@@ -525,7 +527,7 @@ function DayCard(props) {
       var nb = config.participants ? config.participants.split(",").length : 4;
       var body = JSON.stringify({
         model: "claude-sonnet-4-20250514", max_tokens: 1000,
-        messages: [{ role: "user", content: imgs.concat([{ type: "text", text: "Tu es un assistant de carnet de voyage pour un groupe de " + nb + " voyageurs" + (config.participants ? " (" + config.participants + ")" : "") + ". " + parts.join(" ") + "\nRédige un résumé concis en français (50-70 mots). Utilise nous/on et les prénoms. Décris les lieux, l'ambiance, les moments forts. Ton enthousiaste, style journal de bord." }]) }]
+        messages: [{ role: "user", content: imgs.concat([{ type: "text", text: "Tu es un assistant de carnet de voyage pour un groupe de " + nb + " voyageurs" + (config.participants ? " (" + config.participants + ")" : "") + ". " + parts.join(" ") + "\nRédige un résumé concis en français (50-70 mots). Utilise nous/on et les prénoms quand pertinent. Ne mentionne PAS le numéro du jour, la date ni les noms de lieux en début de résumé car ils sont déjà affichés en titre. Concentre-toi sur l'ambiance, les ressentis, les moments forts et les découvertes. Ton enthousiaste, style journal de bord." }]) }]
       });
       var resp;
       try { resp = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: body }); if (!resp.ok) throw new Error(); } catch(e3) { resp = await fetch("/api/summary", { method: "POST", headers: { "Content-Type": "application/json" }, body: body }); }
@@ -540,15 +542,15 @@ function DayCard(props) {
   var locDisplay = locs.filter(function(l) { return l && l.trim(); }).join(" → ");
 
   return (
-    <div style={{ background: "#fff", borderRadius: 16, marginBottom: 4, boxShadow: "0 2px 16px rgba(45,106,79,0.10)", border: "1px solid #d8f3dc", overflow: "hidden" }}>
-      <div onClick={function() { setExpanded(!expanded); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", cursor: "pointer", background: expanded ? "linear-gradient(135deg, #2d6a4f, #40916c)" : "#f7fdf9" }}>
-        <span style={{ fontSize: 22, color: expanded ? "#fff" : "#2d6a4f", fontWeight: 700 }}>Jour {dayNumber}</span>
-        {locDisplay && <span style={{ color: expanded ? "#b7e4c7" : "#52b788", fontSize: 17, fontWeight: 600, marginLeft: 4 }}>— {locDisplay}</span>}
-        {day.km > 0 && <span style={{ color: expanded ? "#b7e4c7" : "#95d5b2", fontSize: 15, fontWeight: 600 }}>🚗 {day.km}km</span>}
-        {day.date && <span style={{ color: expanded ? "#b7e4c7" : "#95d5b2", fontSize: 13, marginLeft: "auto" }}>{day.date}</span>}
-        <span style={{ marginLeft: day.date ? 8 : "auto", color: expanded ? "#fff" : "#2d6a4f", fontSize: 18, transform: expanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</span>
+    <div className="day-card-print" style={{ background: "#fff", borderRadius: 16, marginBottom: 4, boxShadow: "0 2px 16px rgba(45,106,79,0.10)", border: "1px solid #d8f3dc", overflow: "hidden" }}>
+      <div onClick={function() { setExpanded(!expanded); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", cursor: "pointer", background: isExpanded ? "linear-gradient(135deg, #2d6a4f, #40916c)" : "#f7fdf9" }}>
+        <span style={{ fontSize: 22, color: isExpanded ? "#fff" : "#2d6a4f", fontWeight: 700 }}>Jour {dayNumber}</span>
+        {locDisplay && <span style={{ color: isExpanded ? "#b7e4c7" : "#52b788", fontSize: 17, fontWeight: 600, marginLeft: 4 }}>— {locDisplay}</span>}
+        {day.km > 0 && <span style={{ color: isExpanded ? "#b7e4c7" : "#95d5b2", fontSize: 15, fontWeight: 600 }}>🚗 {day.km}km</span>}
+        {day.date && <span style={{ color: isExpanded ? "#b7e4c7" : "#95d5b2", fontSize: 13, marginLeft: "auto" }}>{day.date}</span>}
+        <span style={{ marginLeft: day.date ? 8 : "auto", color: isExpanded ? "#fff" : "#2d6a4f", fontSize: 18, transform: isExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</span>
       </div>
-      {expanded && (
+      {isExpanded && (
         <div style={{ padding: 20 }}>
           <RouteBadge day={day} isAdmin={isAdmin} updateDay={updateDay} onGoMap={onGoMap} />
           {locs.some(function(l) { return l && l.trim(); }) && <MiniMap locations={locs} />}
@@ -758,7 +760,13 @@ export default function App() {
   var _li = useState(-1), lbIndex = _li[0], setLbIndex = _li[1];
   var _lo = useState(true), loading = _lo[0], setLoading = _lo[1];
   var _ss = useState(""), saveStatus = _ss[0], setSaveStatus = _ss[1];
+  var _pr = useState(false), printing = _pr[0], setPrinting = _pr[1];
   var _rg = useState([]), routeGeo = _rg[0], setRouteGeo = _rg[1];
+
+  var printJournal = function() {
+    setPrinting(true);
+    setTimeout(function() { window.print(); setTimeout(function() { setPrinting(false); }, 500); }, 300);
+  };
   var saveTimer = useRef(null);
   var initialized = useRef(false);
 
@@ -846,10 +854,18 @@ export default function App() {
       <style>{
         "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}" +
         ".leaflet-container{font-family:inherit;}" +
-        "@media print{.no-print{display:none !important;}.print-title{display:block !important;}" +
-        "body{background:#fff !important;}" +
+        "@media print{" +
+        ".no-print{display:none !important;}" +
+        ".print-title{display:block !important;}" +
+        "body{background:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}" +
         ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #ddd !important;}" +
-        "img{max-height:200px !important;}}"
+        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #ddd !important;}" +
+        ".leaflet-container{display:none !important;}" +
+        "textarea{border:none !important;resize:none !important;background:transparent !important;}" +
+        "button{display:none !important;}" +
+        "input{border:none !important;background:transparent !important;}" +
+        "img{max-height:200px !important;}" +
+        "}"
       }</style>
       <TripHeader config={config} isAdmin={isAdmin} onLogin={function() { setIsAdmin(true); }} onLogout={function() { setIsAdmin(false); }} saveStatus={saveStatus} />
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 16px 40px" }}>
@@ -857,9 +873,19 @@ export default function App() {
         <TabBar tab={tab} setTab={setTab} />
         {tab === "journal" && (
           <>
+            <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+              <button onClick={printJournal} style={{ background: "linear-gradient(135deg, #40916c, #2d6a4f)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", cursor: "pointer", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+                📄 Exporter en PDF
+              </button>
+            </div>
+            <div className="print-title" style={{ display: "none" }}>
+              <h1 style={{ color: "#2d6a4f", fontSize: 28, marginBottom: 4 }}>{config.title}</h1>
+              <p style={{ color: "#555", fontSize: 14 }}>{config.startDate} → {config.endDate}{config.participants ? " — " + config.participants : ""}</p>
+              <hr style={{ border: "none", borderTop: "2px solid #d8f3dc", margin: "12px 0" }} />
+            </div>
             {days.map(function(d, i) { return (
               <div key={d.id}>
-                <DayCard day={d} dayNumber={i + 1} updateDay={updateDay} removeDay={days.length > 1 ? removeDay : null} isAdmin={isAdmin} config={config} onOpenLightbox={openLightbox} onUploadPhoto={handleUpload} onGoMap={function() { setTab("map"); }} />
+                <DayCard day={d} dayNumber={i + 1} updateDay={updateDay} removeDay={days.length > 1 ? removeDay : null} isAdmin={isAdmin} config={config} onOpenLightbox={openLightbox} onUploadPhoto={handleUpload} onGoMap={function() { setTab("map"); }} forceExpand={printing} />
                 {isAdmin && <InsertDayBtn onClick={function() { insertDay(i); }} />}
               </div>
             ); })}
