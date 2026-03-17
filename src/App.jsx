@@ -265,7 +265,7 @@ function KmCounter(props) {
 // ── Map ──
 function TripMap(props) {
   var days = props.days, routeGeo = props.routeGeo, setRouteGeo = props.setRouteGeo, updateDay = props.updateDay;
-  var cRef = useRef(null), mRef = useRef(null), lRef = useRef([]);
+  var cRef = useRef(null), mRef = useRef(null), markersRef = useRef([]), routeRef = useRef([]);
   var _s = useState(""), status = _s[0], setStatus = _s[1];
   var _r = useState(false), ready = _r[0], setReady = _r[1];
 
@@ -287,22 +287,20 @@ function TripMap(props) {
   useEffect(function() {
     if (!ready || !window.L || !mRef.current) return;
     var L = window.L, m = mRef.current;
-    // Remove old route lines (tagged)
-    lRef.current.forEach(function(l) { m.removeLayer(l); });
-    lRef.current = [];
+    routeRef.current.forEach(function(l) { m.removeLayer(l); });
+    routeRef.current = [];
     if (routeGeo && routeGeo.length > 1) {
       var routeLine = L.polyline(routeGeo, { color: "#2d6a4f", weight: 4, opacity: 0.8 }).addTo(m);
-      lRef.current.push(routeLine);
+      routeRef.current.push(routeLine);
     }
   }, [routeGeo, ready]);
 
   var refresh = useCallback(async function() {
     if (!ready || !window.L || !mRef.current) return;
     var L = window.L, m = mRef.current;
-    // Remove only markers (keep route)
-    lRef.current.forEach(function(l) { if (l._icon || l._path) m.removeLayer(l); });
-    var keepRoute = lRef.current.filter(function(l) { return !l._icon; });
-    lRef.current = keepRoute;
+    // Clear only markers
+    markersRef.current.forEach(function(l) { m.removeLayer(l); });
+    markersRef.current = [];
     var allLocs = getAllLocations(days);
     if (!allLocs.length) { setStatus("Aucun lieu"); m.setView(IRELAND_CENTER, 7); return; }
     setStatus("Recherche de " + allLocs.length + " lieu(x)...");
@@ -313,7 +311,8 @@ function TripMap(props) {
       var icon = L.divIcon({ html: '<div style="background:#2d6a4f;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35)">' + (i + 1) + '</div>', className: "", iconSize: [28, 28], iconAnchor: [14, 14] });
       var th = item.day.photos.slice(0, 2).map(function(p) { return '<img src="' + (p.thumb || p.url || p.src) + '" style="width:40px;height:40px;object-fit:cover;border-radius:4px"/>'; }).join("");
       var popup = '<div style="font-family:system-ui;min-width:100px"><b style="color:#2d6a4f">Jour ' + item.dayId + '</b><br/>' + item.loc + (item.day.date ? '<br/><small style="color:#999">' + item.day.date + '</small>' : "") + (th ? '<div style="display:flex;gap:3px;margin-top:4px">' + th + '</div>' : "") + '</div>';
-      lRef.current.push(L.marker(c, { icon: icon }).addTo(m).bindPopup(popup));
+      var mk = L.marker(c, { icon: icon }).addTo(m).bindPopup(popup);
+      markersRef.current.push(mk);
       pts.push(c);
       await new Promise(function(r) { setTimeout(r, 250); });
     }
@@ -860,12 +859,13 @@ export default function App() {
         "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}" +
         ".leaflet-container{font-family:inherit;}" +
         "@media print{" +
-        "@page{margin:20mm 15mm;}" +
+        "@page{margin:10mm 0;}" +
         ".no-print{display:none !important;}" +
         ".print-title{display:block !important;}" +
-        "body{background:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}" +
-        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #ddd !important;margin-top:10px !important;}" +
-        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #ddd !important;margin-top:10px !important;}" +
+        "body,html{background:linear-gradient(180deg, #f0fdf4 0%, #e8f5e9 100%) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}" +
+        "div[style*='minHeight']{background:linear-gradient(180deg, #f0fdf4 0%, #e8f5e9 100%) !important;}" +
+        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:10px !important;}" +
+        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:10px !important;}" +
         ".leaflet-container{height:160px !important;}" +
         "textarea{border:none !important;resize:none !important;background:transparent !important;}" +
         "button{display:none !important;}" +
