@@ -57,6 +57,17 @@ export default async function handler(req, res) {
       return res.status(200).send(text);
     }
 
+    if (action === 'geocode') {
+      var q = req.query.q;
+      if (!q) return res.status(400).json({ error: "Paramètre q requis" });
+      var r = await fetch("https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(q) + "&limit=1", {
+        headers: { "User-Agent": "IrelandJournal/1.0" }
+      });
+      var text = await r.text();
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(200).send(text);
+    }
+
     if (action === 'photo') {
       const file = req.query.file;
       if (!file) return res.status(400).json({ error: "Paramètre file requis" });

@@ -41,7 +41,9 @@ async function geocode(loc) {
   if (GEO_CACHE[key]) return GEO_CACHE[key];
   try {
     var q = /ireland|irlande/i.test(key) ? key : key + ", Ireland";
-    var r = await fetch("https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(q) + "&limit=1");
+    // Use proxy to avoid CORS and rate limiting
+    var url = "/api/storage?action=geocode&q=" + encodeURIComponent(q);
+    var r = await fetch(url);
     if (!r.ok) return null; var d = await r.json();
     if (d && d.length > 0) { var c = [parseFloat(d[0].lat), parseFloat(d[0].lon)]; GEO_CACHE[key] = c; return c; }
   } catch (e) {} return null;
@@ -298,14 +300,13 @@ function TripMap(props) {
   var _tk = useState(0), tick = _tk[0], setTick = _tk[1];
 
   var refresh = useCallback(async function() {
-    if (!ready || !window.L || !mRef.current) { console.log("Map not ready:", ready, !!window.L, !!mRef.current); return; }
+    if (!ready || !window.L || !mRef.current) return;
     var L = window.L, m = mRef.current;
     m.invalidateSize();
     // Clear markers
     markersRef.current.forEach(function(l) { m.removeLayer(l); });
     markersRef.current = [];
     var allLocs = getAllLocations(days);
-    console.log("Map refresh: " + allLocs.length + " locations found", allLocs.map(function(x) { return x.loc; }));
     if (!allLocs.length) { setStatus("Aucun lieu renseigné"); m.setView(IRELAND_CENTER, 7); return; }
     setStatus("Recherche de " + allLocs.length + " lieu(x)...");
     var pts = [];
