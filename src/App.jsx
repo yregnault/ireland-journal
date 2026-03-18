@@ -643,11 +643,11 @@ function TripHeader(props) {
       <div style={{ position: "absolute", bottom: -10, right: 20, opacity: 0.10, fontSize: 120 }}>🏰</div>
       <LoginBar isAdmin={props.isAdmin} onLogin={props.onLogin} onLogout={props.onLogout} />
       <div style={{ fontSize: 14, letterSpacing: 3, textTransform: "uppercase", color: "#b7e4c7", marginBottom: 8, marginTop: 10 }}>Carnet de Voyage</div>
-      <div style={{ fontSize: 32, fontWeight: 800 }}>{props.config.title || "Mon voyage"}</div>
-      {(props.config.startDate || props.config.endDate) && <div style={{ marginTop: 8, color: "#b7e4c7", fontSize: 14 }}>{props.config.startDate} → {props.config.endDate}</div>}
-      {props.config.participants && <div style={{ marginTop: 6, color: "#95d5b2", fontSize: 13 }}>👥 {props.config.participants}</div>}
+      <div style={{ fontSize: 38, fontWeight: 800 }}>{props.config.title || "Mon voyage"}</div>
+      {(props.config.startDate || props.config.endDate) && <div style={{ marginTop: 10, color: "#b7e4c7", fontSize: 18 }}>{props.config.startDate} → {props.config.endDate}</div>}
+      {props.config.participants && <div style={{ marginTop: 8, color: "#95d5b2", fontSize: 17 }}>👥 {props.config.participants}</div>}
       <div style={{ marginTop: 6, display: "flex", justifyContent: "center", gap: 8, alignItems: "center" }}>
-        {!props.isAdmin && <span style={{ fontSize: 12, color: "#95d5b2" }}>👀 Mode visiteur</span>}
+        {!props.isAdmin && <span className="no-print" style={{ fontSize: 12, color: "#95d5b2" }}>👀 Mode visiteur</span>}
         {props.saveStatus && <span style={{ fontSize: 11, color: "#b7e4c7", background: "rgba(255,255,255,0.1)", padding: "2px 10px", borderRadius: 6 }}>{props.saveStatus}</span>}
       </div>
     </div>
@@ -721,11 +721,6 @@ function FullSummary(props) {
         <button onClick={printSummary} style={{ background: "linear-gradient(135deg, #40916c, #2d6a4f)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", cursor: "pointer", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
           📄 Exporter en PDF
         </button>
-      </div>
-      <div className="print-title" style={{ display: "none" }}>
-        <h1 style={{ color: "#2d6a4f", fontSize: 28, marginBottom: 4 }}>{config.title}</h1>
-        <p style={{ color: "#555", fontSize: 14 }}>{config.startDate} → {config.endDate} — {config.participants}</p>
-        <hr style={{ border: "none", borderTop: "2px solid #d8f3dc", margin: "12px 0" }} />
       </div>
       {s.map(function(d) {
         var dayNum = days.indexOf(d) + 1;
@@ -872,7 +867,6 @@ export default function App() {
         "@media print{" +
         "@page{margin:10mm 0;}" +
         ".no-print{display:none !important;}" +
-        ".print-title{display:block !important;}" +
         "body,html{background:linear-gradient(180deg, #f0fdf4 0%, #e8f5e9 100%) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}" +
         "div[style*='minHeight']{background:linear-gradient(180deg, #f0fdf4 0%, #e8f5e9 100%) !important;}" +
         ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:10px !important;}" +
@@ -890,16 +884,6 @@ export default function App() {
         <TabBar tab={tab} setTab={setTab} />
         {tab === "journal" && (
           <>
-            <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-              <button onClick={printJournal} style={{ background: "linear-gradient(135deg, #40916c, #2d6a4f)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", cursor: "pointer", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-                📄 Exporter en PDF
-              </button>
-            </div>
-            <div className="print-title" style={{ display: "none" }}>
-              <h1 style={{ color: "#2d6a4f", fontSize: 28, marginBottom: 4 }}>{config.title}</h1>
-              <p style={{ color: "#555", fontSize: 14 }}>{config.startDate} → {config.endDate}{config.participants ? " — " + config.participants : ""}</p>
-              <hr style={{ border: "none", borderTop: "2px solid #d8f3dc", margin: "12px 0" }} />
-            </div>
             {days.map(function(d, i) { return (
               <div key={d.id}>
                 <DayCard day={d} dayNumber={i + 1} updateDay={updateDay} removeDay={days.length > 1 ? removeDay : null} isAdmin={isAdmin} config={config} onOpenLightbox={openLightbox} onUploadPhoto={handleUpload} onGoMap={function() { setTab("map"); }} forceExpand={printing} />
