@@ -1,6 +1,53 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 const DEFAULT_PASSWORD = "voyage2026";
+const VISITOR_PASSWORD = "voyage";
+
+// ── Access Gate (server-side auth) ──
+function AccessGate(props) {
+  var onAccess = props.onAccess, theme = props.theme;
+  var t = theme || THEMES.default;
+  var _p = useState(""), pw = _p[0], setPw = _p[1];
+  var _e = useState(""), err = _e[0], setErr = _e[1];
+  var _l = useState(false), loading = _l[0], setLoading = _l[1];
+
+  var tryAccess = async function() {
+    setLoading(true);
+    setErr("");
+    var role = await serverLogin(pw);
+    setLoading(false);
+    if (role) {
+      onAccess(role);
+    } else {
+      setErr("Mot de passe incorrect");
+    }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, " + t.textDark + " 0%, " + t.primary + " 50%, " + t.primaryLight + " 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" }}>
+      <div style={{ background: "rgba(255,255,255,0.95)", borderRadius: 24, padding: "48px 40px", maxWidth: 380, width: "90%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div style={{ fontSize: 60, marginBottom: 16 }}>{t.emoji1}</div>
+        <h1 style={{ color: t.primary, fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Carnet de Voyage</h1>
+        <p style={{ color: "#777", fontSize: 14, marginBottom: 28 }}>Ce carnet est privé. Entrez le mot de passe pour y accéder.</p>
+        <input
+          type="password"
+          value={pw}
+          onChange={function(e) { setPw(e.target.value); setErr(""); }}
+          onKeyDown={function(e) { if (e.key === "Enter") tryAccess(); }}
+          placeholder="Mot de passe"
+          autoFocus
+          disabled={loading}
+          style={{ width: "100%", padding: "14px 18px", borderRadius: 12, border: "2px solid " + t.border, fontSize: 16, outline: "none", boxSizing: "border-box", fontFamily: "inherit", textAlign: "center" }}
+        />
+        <button onClick={tryAccess} disabled={loading} style={{ width: "100%", marginTop: 16, padding: "14px", borderRadius: 12, border: "none", background: "linear-gradient(135deg, " + t.primaryLight + ", " + t.primary + ")", color: "#fff", fontSize: 16, fontWeight: 700, cursor: loading ? "default" : "pointer", fontFamily: "inherit", opacity: loading ? 0.7 : 1 }}>
+          {loading ? "Vérification..." : "Accéder au carnet"}
+        </button>
+        {err && <p style={{ color: "#ef4444", fontSize: 13, marginTop: 12 }}>{err}</p>}
+        <p style={{ color: "#bbb", fontSize: 11, marginTop: 24 }}>🔒 Accès réservé aux participants et invités</p>
+      </div>
+    </div>
+  );
+}
 const IRELAND_CENTER = [53.5, -7.5];
 const GEO_CACHE = {};
 const SAVE_DELAY = 2000;
@@ -68,12 +115,44 @@ function proxyPhotoUrl(url) {
 async function serverLoad() {
   try {
     var r = await fetch("/api/storage?action=load"); if (!r.ok) return null;
-    var data = await r.json(); if (!data) return null;
-    if (data.days) { data.days = data.days.map(function(d) { if (d.photos) { d.photos = d.photos.map(function(p) { return { id: p.id, url: proxyPhotoUrl(p.url), thumb: proxyPhotoUrl(p.thumb) }; }); } return d; }); }
+    var raw = await r.text();
+    if (!raw || raw === "null") return null;
+
+    // Try to decrypt first (new encrypted format)
+    var jsonStr = decryptData(raw.replace(/^"/, "").replace(/"$/, ""));
+    var data = null;
+
+    if (jsonStr) {
+      try { data = JSON.parse(jsonStr); } catch (e) { data = null; }
+    }
+
+    // Fallback: try parsing raw JSON (old unencrypted format / migration)
+    if (!data) {
+      try { data = JSON.parse(raw); } catch (e) { return null; }
+    }
+
+    if (!data) return null;
+    if (data.days) {
+      data.days = data.days.map(function(d) {
+        if (d.photos) { d.photos = d.photos.map(function(p) { return { id: p.id, url: proxyPhotoUrl(p.url), thumb: proxyPhotoUrl(p.thumb) }; }); }
+        return d;
+      });
+    }
     return data;
   } catch (e) { return null; }
 }
-async function serverSave(data) { try { await fetch("/api/storage?action=save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); } catch (e) {} }
+
+async function serverSave(data) {
+  try {
+    var jsonStr = JSON.stringify(data);
+    var encrypted = encryptData(jsonStr);
+    await fetch("/api/storage?action=save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(encrypted)
+    });
+  } catch (e) {}
+}
 async function serverUpload(base64, filename) {
   try { var r = await fetch("/api/storage?action=upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base64: base64, filename: filename }) }); if (!r.ok) return null; var d = await r.json(); return proxyPhotoUrl(d.url); } catch (e) { return null; }
 }
@@ -197,17 +276,34 @@ function LoginBar(props) {
   var _s = useState(false), show = _s[0], setShow = _s[1];
   var _p = useState(""), pw = _p[0], setPw = _p[1];
   var _e = useState(""), err = _e[0], setErr = _e[1];
-  var tryLogin = function() { if (pw === DEFAULT_PASSWORD) { onLogin(); setShow(false); setPw(""); setErr(""); } else setErr("Mot de passe incorrect"); };
-  if (isAdmin) return <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 16px", marginBottom: -8 }}><button onClick={onLogout} style={{ background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>🔓 Admin — Déconnexion</button></div>;
+  var _l = useState(false), busy = _l[0], setBusy = _l[1];
+  var tryLogin = async function() {
+    setBusy(true); setErr("");
+    var role = await serverLogin(pw);
+    setBusy(false);
+    if (role === "admin") { onLogin(); setShow(false); setPw(""); }
+    else { setErr("Mot de passe admin incorrect"); }
+  };
+  if (isAdmin) return (
+    <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 16px", marginBottom: -8, gap: 8 }}>
+      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, alignSelf: "center" }}>🔓 Admin</span>
+      <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Déconnexion</button>
+    </div>
+  );
   if (show) return (
     <div style={{ display: "flex", justifyContent: "center", gap: 8, padding: "0 16px", marginBottom: -8, alignItems: "center", flexWrap: "wrap" }}>
-      <input type="password" value={pw} onChange={function(e) { setPw(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") tryLogin(); }} placeholder="Mot de passe" autoFocus style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 13, outline: "none", width: 160 }} />
-      <button onClick={tryLogin} style={{ background: "#fff", color: "#2d6a4f", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>OK</button>
+      <input type="password" value={pw} onChange={function(e) { setPw(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") tryLogin(); }} placeholder="Mot de passe admin" autoFocus disabled={busy} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 13, outline: "none", width: 160 }} />
+      <button onClick={tryLogin} disabled={busy} style={{ background: "#fff", color: "#333", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{busy ? "..." : "OK"}</button>
       <button onClick={function() { setShow(false); setErr(""); }} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Annuler</button>
       {err && <span style={{ color: "#fca5a5", fontSize: 12, width: "100%", textAlign: "center" }}>{err}</span>}
     </div>
   );
-  return <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 16px", marginBottom: -8 }}><button onClick={function() { setShow(true); }} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", color: "#b7e4c7", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>🔒 Connexion admin</button></div>;
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 16px", marginBottom: -8, gap: 8 }}>
+      <button onClick={function() { setShow(true); }} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.7)", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>🔒 Passer en admin</button>
+      <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Quitter</button>
+    </div>
+  );
 }
 
 // ── Settings ──
@@ -829,6 +925,7 @@ export default function App() {
   var _d = useState([]), days = _d[0], setDays = _d[1];
   var _t = useState("journal"), tab = _t[0], setTab = _t[1];
   var _a = useState(false), isAdmin = _a[0], setIsAdmin = _a[1];
+  var _auth = useState(null), authLevel = _auth[0], setAuthLevel = _auth[1]; // null, "visitor", "admin"
   var _lp = useState([]), lbPhotos = _lp[0], setLbPhotos = _lp[1];
   var _li = useState(-1), lbIndex = _li[0], setLbIndex = _li[1];
   var _lo = useState(true), loading = _lo[0], setLoading = _lo[1];
@@ -847,7 +944,9 @@ export default function App() {
   var mapCenter = theme.center;
   GEOCODE_DEST = config.destinations || theme.name || "";
 
+  // ── Load data AFTER authentication ──
   useEffect(function() {
+    if (!authLevel) return;
     (async function() {
       var data = await serverLoad();
       if (data) {
@@ -865,7 +964,7 @@ export default function App() {
       initialized.current = true;
       setLoading(false);
     })();
-  }, []);
+  }, [authLevel]);
 
   useEffect(function() {
     if (!initialized.current) return;
@@ -920,6 +1019,22 @@ export default function App() {
   var navLightbox = useCallback(function(dir) { setLbIndex(function(i) { var n = i + dir; if (n < 0) return lbPhotos.length - 1; if (n >= lbPhotos.length) return 0; return n; }); }, [lbPhotos]);
   var handleUpload = useCallback(async function(b64, fname) { return await serverUpload(b64, fname); }, []);
 
+  var handleAccess = function(level) {
+    setAuthLevel(level);
+    setIsAdmin(level === "admin");
+  };
+
+  var handleLogout = function() {
+    setAuthLevel(null);
+    setIsAdmin(false);
+    setAuthToken(null);
+  };
+
+  // Show access gate if not authenticated
+  if (!authLevel) {
+    return <AccessGate onAccess={handleAccess} theme={theme} />;
+  }
+
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(180deg, " + theme.bg1 + ", " + theme.bg2 + ")", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui" }}>
       <div style={{ textAlign: "center", color: theme.primary }}><div style={{ fontSize: 60, marginBottom: 16 }}>{theme.emoji1}</div><div style={{ fontSize: 20, fontWeight: 700 }}>Chargement du carnet...</div></div>
@@ -946,7 +1061,7 @@ export default function App() {
         "img{max-height:200px !important;}" +
         "}"
       }</style>
-      <TripHeader config={config} isAdmin={isAdmin} onLogin={function() { setIsAdmin(true); }} onLogout={function() { setIsAdmin(false); }} saveStatus={saveStatus} theme={theme} />
+      <TripHeader config={config} isAdmin={isAdmin} onLogin={function() { handleAccess("admin"); }} onLogout={handleLogout} saveStatus={saveStatus} theme={theme} />
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 16px 40px" }}>
         <StatsBar days={days} theme={theme} />
         <TabBar tab={tab} setTab={setTab} theme={theme} />
