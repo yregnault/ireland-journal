@@ -108,7 +108,7 @@ function addDaysToDate(ds, n) { if (!ds) return ""; var d = new Date(ds); d.setD
 function makeDay(id, date) { return { id: id, date: date || "", locations: [""], notes: "", photos: [], summary: "", km: 0, kmTime: "" }; }
 function getAllLocations(days) {
   var locs = [];
-  days.forEach(function(d) { (d.locations || [d.location || ""]).forEach(function(l) { if (l && l.trim()) locs.push({ dayId: d.id, loc: l.trim(), day: d }); }); });
+  days.forEach(function(d, idx) { (d.locations || [d.location || ""]).forEach(function(l) { if (l && l.trim()) locs.push({ dayId: d.id, dayNum: idx + 1, loc: l.trim(), day: d }); }); });
   return locs;
 }
 
@@ -315,7 +315,7 @@ function TripMap(props) {
       var c = await geocode(item.loc); if (!c) continue;
       var icon = L.divIcon({ html: '<div style="background:#2d6a4f;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35)">' + (i + 1) + '</div>', className: "", iconSize: [28, 28], iconAnchor: [14, 14] });
       var th = item.day.photos.slice(0, 2).map(function(p) { return '<img src="' + (p.thumb || p.url || p.src) + '" style="width:40px;height:40px;object-fit:cover;border-radius:4px"/>'; }).join("");
-      var popup = '<div style="font-family:system-ui;min-width:100px"><b style="color:#2d6a4f">Jour ' + item.dayId + '</b><br/>' + item.loc + (item.day.date ? '<br/><small style="color:#999">' + item.day.date + '</small>' : "") + (th ? '<div style="display:flex;gap:3px;margin-top:4px">' + th + '</div>' : "") + '</div>';
+      var popup = '<div style="font-family:system-ui;min-width:100px"><b style="color:#2d6a4f">Jour ' + item.dayNum + '</b><br/>' + item.loc + (item.day.date ? '<br/><small style="color:#999">' + item.day.date + '</small>' : "") + (th ? '<div style="display:flex;gap:3px;margin-top:4px">' + th + '</div>' : "") + '</div>';
       var mk = L.marker(c, { icon: icon }).addTo(m).bindPopup(popup);
       markersRef.current.push(mk);
       pts.push(c);
@@ -348,7 +348,7 @@ function TripMap(props) {
           {getAllLocations(days).map(function(item, i) { return (
             <div key={i} style={{ background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, border: "1px solid #d8f3dc", display: "flex", alignItems: "center", gap: 5 }}>
               <span style={{ background: "#2d6a4f", color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{i + 1}</span>
-              <span style={{ color: "#555", fontSize: 11 }}>J{item.dayId}</span>
+              <span style={{ color: "#555", fontSize: 11 }}>J{item.dayNum}</span>
               <span style={{ color: "#2d6a4f", fontWeight: 500 }}>{item.loc}</span>
             </div>
           ); })}
@@ -865,12 +865,13 @@ export default function App() {
         "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}" +
         ".leaflet-container{font-family:inherit;}" +
         "@media print{" +
-        "@page{margin:25mm 5mm 15mm 5mm;}" +
+        "@page{margin:8mm 5mm 8mm 5mm;}" +
         ".no-print{display:none !important;}" +
-        "body,html{background:linear-gradient(180deg, #f0fdf4 0%, #e8f5e9 100%) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}" +
-        "div[style*='minHeight']{background:linear-gradient(180deg, #f0fdf4 0%, #e8f5e9 100%) !important;}" +
-        ".summary-card{break-inside:avoid;break-before:auto;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:16px !important;page-break-inside:avoid;}" +
-        ".day-card-print{break-inside:avoid;break-before:auto;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:16px !important;page-break-inside:avoid;}" +
+        "body,html{background:#e8f5e9 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;margin:0 !important;padding:0 !important;}" +
+        "div[style*='minHeight']{background:#e8f5e9 !important;}" +
+        "*, *::before, *::after{background-color:transparent;}" +
+        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:12px !important;page-break-inside:avoid;background:#fff !important;}" +
+        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:12px !important;page-break-inside:avoid;background:#fff !important;}" +
         ".leaflet-container{height:160px !important;}" +
         "textarea{border:none !important;resize:none !important;background:transparent !important;}" +
         "button{display:none !important;}" +
