@@ -865,12 +865,12 @@ export default function App() {
         "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}" +
         ".leaflet-container{font-family:inherit;}" +
         "@media print{" +
-        "@page{margin:10mm 0;}" +
+        "@page{margin:25mm 5mm 15mm 5mm;}" +
         ".no-print{display:none !important;}" +
         "body,html{background:linear-gradient(180deg, #f0fdf4 0%, #e8f5e9 100%) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}" +
         "div[style*='minHeight']{background:linear-gradient(180deg, #f0fdf4 0%, #e8f5e9 100%) !important;}" +
-        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:10px !important;}" +
-        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:10px !important;}" +
+        ".summary-card{break-inside:avoid;break-before:auto;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:16px !important;page-break-inside:avoid;}" +
+        ".day-card-print{break-inside:avoid;break-before:auto;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:16px !important;page-break-inside:avoid;}" +
         ".leaflet-container{height:160px !important;}" +
         "textarea{border:none !important;resize:none !important;background:transparent !important;}" +
         "button{display:none !important;}" +
