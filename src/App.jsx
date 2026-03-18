@@ -865,13 +865,13 @@ export default function App() {
         "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}" +
         ".leaflet-container{font-family:inherit;}" +
         "@media print{" +
-        "@page{margin:3mm;}" +
+        "@page{margin:5mm 3mm;}" +
         ".no-print{display:none !important;}" +
         "body,html{background:#e8f5e9 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;margin:0 !important;padding:0 !important;}" +
-        "div[style*='minHeight']{background:#e8f5e9 !important;padding-top:10mm !important;}" +
+        "div[style*='minHeight']{background:#e8f5e9 !important;padding:15mm 5mm !important;}" +
         "*, *::before, *::after{background-color:transparent;}" +
-        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin:12px 8px !important;page-break-inside:avoid;background:#fff !important;}" +
-        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin:12px 8px !important;page-break-inside:avoid;background:#fff !important;}" +
+        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin:20px 20px !important;page-break-inside:avoid;background:#fff !important;}" +
+        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin:20px 20px !important;page-break-inside:avoid;background:#fff !important;}" +
         ".leaflet-container{height:160px !important;}" +
         "textarea{border:none !important;resize:none !important;background:transparent !important;}" +
         "button{display:none !important;}" +
