@@ -726,7 +726,7 @@ function FullSummary(props) {
         var dayNum = days.indexOf(d) + 1;
         var locStr = (d.locations || []).filter(function(l) { return l && l.trim(); }).join(" → ");
         return (
-          <div key={d.id} className="summary-card" style={{ marginBottom: 28, marginTop: 20, background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 2px 10px rgba(45,106,79,0.08)", border: "1px solid #d8f3dc" }}>
+          <div key={d.id} className="summary-card" style={{ marginBottom: 28, marginTop: 20, background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 2px 10px rgba(45,106,79,0.08)", border: "1px solid #d8f3dc" }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
               <span style={{ fontSize: 20, fontWeight: 700, color: "#2d6a4f" }}>Jour {dayNum}</span>
               {locStr && <span style={{ color: "#52b788", fontSize: 17, fontWeight: 600 }}>📍 {locStr}</span>}
@@ -865,13 +865,13 @@ export default function App() {
         "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}" +
         ".leaflet-container{font-family:inherit;}" +
         "@media print{" +
-        "@page{margin:8mm 5mm 8mm 5mm;}" +
+        "@page{margin:3mm;}" +
         ".no-print{display:none !important;}" +
         "body,html{background:#e8f5e9 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;margin:0 !important;padding:0 !important;}" +
-        "div[style*='minHeight']{background:#e8f5e9 !important;}" +
+        "div[style*='minHeight']{background:#e8f5e9 !important;padding-top:10mm !important;}" +
         "*, *::before, *::after{background-color:transparent;}" +
-        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:12px !important;page-break-inside:avoid;background:#fff !important;}" +
-        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin-top:12px !important;page-break-inside:avoid;background:#fff !important;}" +
+        ".summary-card{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin:12px 8px !important;page-break-inside:avoid;background:#fff !important;}" +
+        ".day-card-print{break-inside:avoid;box-shadow:none !important;border:1px solid #d8f3dc !important;margin:12px 8px !important;page-break-inside:avoid;background:#fff !important;}" +
         ".leaflet-container{height:160px !important;}" +
         "textarea{border:none !important;resize:none !important;background:transparent !important;}" +
         "button{display:none !important;}" +
